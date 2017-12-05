@@ -1,6 +1,7 @@
 package iot
 
 import akka.actor.{Actor, ActorLogging, ActorRef, Props, Terminated}
+import iot.DeviceGroup.{ReplyDeviceList, RequestDeviceList}
 import iot.DeviceManager.RequestTrackDevice
 
 /**
@@ -29,12 +30,17 @@ class DeviceGroup(groupId: String) extends Actor with ActorLogging {
         case None =>
           log.info("Creating device actor for {}", trackMsg.deviceId)
           val deviceActor = context.actorOf(Device.props(groupId, trackMsg.deviceId), s"device-${trackMsg.deviceId}")
+          context.watch(deviceActor)
+          actorToDeviceId += deviceActor -> trackMsg.deviceId
           deviceIdToActor += trackMsg.deviceId -> deviceActor
           deviceActor forward trackMsg
       }
     case RequestTrackDevice(groupId, deviceId) =>
       log.warning("Ignoring TrackDevice request for {}. This actor is responsible for {}.",
         groupId, this.groupId)
+
+    case RequestDeviceList(requestId) =>
+      sender() ! ReplyDeviceList(requestId, deviceIdToActor.keySet)
 
     case Terminated(deviceActor) =>
       val deviceId = actorToDeviceId(deviceActor)
